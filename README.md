@@ -1,23 +1,8 @@
-# Agent Packet
+# Local LLM Agent
 
-A powerful, scalable local LLM agent system that combines:
+Local agent system integrating Ollama LLMs, ChromaDB vector storage, and MCP tool protocol.
 
-- **Local LLM integration** via Ollama
-- **RAG (Retrieval Augmented Generation)** with vector databases
-- **MCP (Model Context Protocol)** for tool integration
-- **Modular architecture** with factory patterns for extensibility
-
-## 🚀 Features
-
-- **Local-First**: Runs entirely on your hardware using Ollama
-- **RAG Integration**: ChromaDB vector database for knowledge retrieval
-- **Tool Integration**: MCP server with built-in tools (calculator, search, datetime, etc.)
-- **Streaming Support**: Real-time streaming responses
-- **Extensible**: Plugin architecture for custom tools and providers
-- **Type-Safe**: Full type hints with Pydantic configuration
-- **Async-First**: Built for performance with async/await
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -33,255 +18,209 @@ A powerful, scalable local LLM agent system that combines:
                     └─────────────────┘
 ```
 
-## 📋 Prerequisites
+## 1. Clone Repository
 
-- Python 3.10+
-- [Ollama](https://ollama.ai/) installed and running
-- Required models:
-  - `llama3.1:8b` (or your preferred LLM)
-  - `nomic-embed-text:latest` (for embeddings)
-
-## 🛠️ Installation
-
-1. **Clone and setup:**
-
-   ```bash
-   git clone https://github.com/ColdByDefault/agent-packet.git
-   cd agent-packet
-   conda create -n agent_packet python=3.10 -y
-   conda activate agent_packet
-   pip install -r requirements.txt
-   ```
-
-2. **Configure environment:**
-
-   ```bash
-   cp .env.example .env
-   # Edit .env with your settings
-   ```
-
-3. **Ensure Ollama is running:**
-   ```bash
-   ollama serve
-   ollama pull llama3.1:8b
-   ollama pull nomic-embed-text:latest
-   ```
-
-## 🚀 Quick Start
-
-```python
-import asyncio
-from src.llm_agent import LocalLLMAgent, AgentConfig
-
-async def main():
-    # Create configuration
-    config = AgentConfig()
-
-    # Initialize agent
-    async with LocalLLMAgent(config) as agent:
-        # Add knowledge
-        await agent.add_knowledge("Python is a programming language...")
-
-        # Chat with the agent
-        response = await agent.chat("What is Python?")
-        print(response)
-
-        # Use tools
-        result = await agent.execute_tool("calculator", {"expression": "2 + 3"})
-        print(f"2 + 3 = {result}")
-
-asyncio.run(main())
+```bash
+git clone https://github.com/ColdByDefault/agent-packet.git
+cd agent-packet
 ```
 
-## 📖 Example Usage
+## 2. Install Python 3.10
 
-Run the complete example:
+### Manual Download
+
+Download and install Python 3.10 from [python.org](https://www.python.org/downloads/)
+
+### PowerShell (Windows)
+
+```powershell
+# Using winget
+winget install Python.Python.3.10
+
+# Using chocolatey
+choco install python --version=3.10.11
+
+# Using scoop
+scoop install python310
+```
+
+## 3. Install Miniconda
+
+### Manual Download
+
+Download and install Miniconda from [conda.io](https://docs.conda.io/en/latest/miniconda.html)
+
+### PowerShell (Windows)
+
+```powershell
+# Using winget
+winget install Anaconda.Miniconda3
+
+# Using chocolatey
+choco install miniconda3
+
+# Using scoop
+scoop install miniconda3
+```
+
+## 4. Install Ollama and Models
+
+### Install Ollama
+
+Download from [ollama.ai](https://ollama.ai/) and install.
+
+### Pull Required Models
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+ollama pull nomic-embed-text:latest
+```
+
+### Change Models (Optional)
+
+Edit `.env` file to use different models:
+
+```bash
+OLLAMA__MODEL=llama3.2:3b               # Alternative LLM
+RAG__EMBEDDING_MODEL=mxbai-embed-large  # Alternative embedding model
+```
+
+## 5. Create Conda Environment with Python 3.10
+
+```bash
+conda create -n llm_agent python=3.10 -y
+conda activate llm_agent
+```
+
+## 6. Install Requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+## 7. Test Setup
+
+### Test Ollama Connection
+
+```bash
+python debug/debug_ollama.py
+```
+
+Expected output:
+
+- Connection status: 200
+- Available models listed
+- Chat API test successful
+
+### Test Configuration and Imports
+
+```bash
+python debug/test_setup.py
+```
+
+Expected output:
+
+- Configuration created
+- All imports successful
+- Ollama accessible
+- Available models listed
+
+### Debug Example (Detailed Errors)
+
+```bash
+python debug/debug_example.py
+```
+
+## 8. Run Final Test
 
 ```bash
 python example.py
 ```
 
-This will demonstrate:
+## 9. What Happens When Running example.py
 
-- Agent initialization
-- Knowledge base population
-- RAG-powered conversations
-- MCP tool usage
-- Streaming responses
+### Process Flow:
 
-## 🔧 Configuration
+1. **Agent Initialization**: Creates LocalLLMAgent with Ollama, ChromaDB, and MCP server
+2. **Component Setup**: Initializes LLM provider, vector database, and tool server
+3. **Knowledge Addition**: Adds 3 sample documents to vector database
+4. **Knowledge Search**: Tests retrieval of relevant documents
+5. **Tool Testing**: Tests calculator and datetime tools
+6. **Interactive Chat**: Demonstrates 4 example conversations
+7. **Statistics Display**: Shows final conversation length and server info
 
-The system uses Pydantic for configuration management. Key settings:
+### Expected Results:
 
-```python
-from src.llm_agent.core.config import AgentConfig
+- Agent stats showing model and tools
+- Vector database populated with 3 documents
+- Knowledge retrieval scores and content previews
+- Tool execution results (calculations, current time)
+- Streaming chat responses for each test query
+- MCP server running confirmation
 
-config = AgentConfig(
-    # Agent settings
-    agent_name="MyAgent",
-    system_prompt="You are a helpful assistant...",
+## 10. MCP Tools Available
 
-    # Ollama settings
-    ollama=AgentConfig.OllamaConfig(
-        model="llama3.1:8b",
-        temperature=0.7
-    ),
+### Built-in Tools:
 
-    # RAG settings
-    rag=AgentConfig.RAGConfig(
-        vector_db_path="./data/vectordb",
-        embedding_model="nomic-embed-text:latest"
-    ),
+- **calculator**: Execute mathematical expressions
+  ```python
+  await agent.execute_tool("calculator", {"expression": "2 + 3 * 4"})
+  ```
+- **text_search**: Regex search in text
+  ```python
+  await agent.execute_tool("text_search", {"text": "sample", "pattern": "sam.*"})
+  ```
+- **datetime**: Date/time operations
+  ```python
+  await agent.execute_tool("datetime", {"operation": "current"})
+  ```
+- **system_info**: System information
+  ```python
+  await agent.execute_tool("system_info", {"info_type": "platform"})
+  ```
 
-    # MCP settings
-    mcp=AgentConfig.MCPConfig(
-        enabled=True,
-        server_port=8000
-    )
-)
+### Tool Server:
+
+- **Default Port**: 8001 (in `.env.example`)
+- **HTTP API**: `http://localhost:8001`
+- **Access**: RESTful endpoints for each tool
+
+## 11. Server Configuration
+
+### MCP Server Port
+
+- **Example.py uses**: `8001` (configurable)
+
+```bash
+MCP__SERVER_PORT=8001  # Default in .env
 ```
 
-## 🧩 Extending the System
+### Ollama Server Port
 
-### Adding Custom LLM Providers
+Default: `11434`
 
-```python
-from src.llm_agent.llm.base import LLMProvider
-from src.llm_agent.llm.factory import LLMProviderFactory
-
-class CustomProvider(LLMProvider):
-    # Implement abstract methods
-    pass
-
-# Register the provider
-LLMProviderFactory.register_provider("custom", CustomProvider)
+```bash
+OLLAMA__BASE_URL=http://localhost:11434
 ```
 
-### Adding Custom Tools
+### Environment Configuration
 
-```python
-from src.llm_agent.mcp.base import MCPTool, ToolDefinition
+Copy `.env.example` to `.env` and configure:
 
-class CustomTool(MCPTool):
-    def get_definition(self) -> ToolDefinition:
-        # Define tool interface
-        pass
+```bash
+# Ollama settings
+OLLAMA__BASE_URL=http://localhost:11434
+OLLAMA__MODEL=llama3.1:8b
+OLLAMA__TEMPERATURE=0.7
 
-    async def execute(self, parameters):
-        # Implement tool logic
-        pass
+# RAG settings
+RAG__VECTOR_DB_PATH=./data/vectordb
+RAG__EMBEDDING_MODEL=nomic-embed-text:latest
+RAG__CHUNK_SIZE=1000
+RAG__MAX_RESULTS=5
 
-# Register with MCP server
-agent.mcp_server.register_tool(CustomTool())
+# MCP settings
+MCP__ENABLED=true
+MCP__SERVER_PORT=8001
 ```
-
-## 🏷️ Available Tools
-
-Built-in MCP tools:
-
-- **Calculator**: Mathematical expressions
-- **Text Search**: Regex search in text
-- **DateTime**: Date/time operations
-- **System Info**: System information retrieval
-
-## 📁 Project Structure
-
-```
-src/llm_agent/
-├── core/
-│   ├── config.py      # Configuration management
-│   └── agent.py       # Main agent orchestrator
-├── llm/
-│   ├── base.py        # LLM provider abstractions
-│   ├── ollama.py      # Ollama integration
-│   └── factory.py     # LLM provider factory
-├── rag/
-│   ├── base.py        # RAG system abstractions
-│   ├── chroma.py      # ChromaDB integration
-│   ├── embeddings.py  # Ollama embeddings
-│   ├── processors.py  # Document processing
-│   └── factory.py     # RAG system factory
-└── mcp/
-    ├── base.py        # MCP abstractions
-    ├── tools.py       # Built-in tools
-    ├── server.py      # HTTP MCP server
-    └── factory.py     # MCP factory
-```
-
-## 🔍 API Reference
-
-### LocalLLMAgent
-
-Main agent class that orchestrates all components.
-
-```python
-async with LocalLLMAgent(config) as agent:
-    # Chat methods
-    response = await agent.chat("Hello")
-    async for chunk in agent.chat_stream("Hello"):
-        print(chunk)
-
-    # Knowledge management
-    doc_id = await agent.add_knowledge("Some text...")
-    doc_id = await agent.add_knowledge_from_file("document.txt")
-    results = await agent.search_knowledge("query")
-
-    # Tool execution
-    result = await agent.execute_tool("calculator", {"expression": "2+2"})
-    tools = await agent.get_available_tools()
-
-    # Utilities
-    stats = agent.get_stats()
-    agent.clear_conversation()
-```
-
-## 🌟 Why This Architecture?
-
-1. **Modularity**: Each component (LLM, RAG, MCP) is separate and swappable
-2. **Extensibility**: Factory patterns make adding new providers easy
-3. **Type Safety**: Pydantic ensures configuration validity
-4. **Performance**: Async-first design for concurrent operations
-5. **Local-First**: No external API dependencies
-6. **Production-Ready**: Proper error handling, logging, and resource management
-
-## 🚧 Next Steps
-
-- Add more document processors (PDF, Word, etc.)
-- Implement conversation memory persistence
-- Add web search tools
-- Create CLI interface
-- Add Docker deployment
-- Implement agent-to-agent communication
-
-## 🛡️ Security & Privacy
-
-- **Fully Local**: All processing happens on your machine
-- **No Data Transmission**: Your documents and conversations never leave your system
-- **Private RAG**: Build your own knowledge base without cloud dependencies
-- **Configurable**: Complete control over models, data storage, and processing
-
-## ⚠️ Important Notes
-
-- **Data Privacy**: This project does not include pre-built knowledge bases or training data
-- **Model Requirements**: You need to download your own Ollama models
-- **Storage**: Vector databases and documents are stored locally in the `data/` directory
-- **Performance**: Processing speed depends on your hardware capabilities
-
-## 🤝 Contributing
-
-This is an open-source project. Customize and extend it for your needs:
-
-1. Add your own tools in `src/llm_agent/mcp/tools.py`
-2. Create custom LLM providers in `src/llm_agent/llm/`
-3. Implement new vector databases in `src/llm_agent/rag/`
-4. Extend configuration in `src/llm_agent/core/config.py`
-
-Feel free to submit issues, feature requests, or pull requests!
-
-## 📄 License
-
-MIT License - feel free to use this as a starting point for your projects!
-
----
-
-**Ready to build your own intelligent agent? Clone this repository and start experimenting with local LLMs, RAG systems, and MCP tools!**
