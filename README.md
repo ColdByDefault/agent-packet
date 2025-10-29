@@ -1,4 +1,4 @@
-# Local LLM Agent
+# Agent Packet
 
 A powerful, scalable local LLM agent system that combines:
 
@@ -46,9 +46,10 @@ A powerful, scalable local LLM agent system that combines:
 1. **Clone and setup:**
 
    ```bash
-   cd your_project_directory
-   conda create -n llm_agent python=3.10 -y
-   conda activate llm_agent
+   git clone https://github.com/ColdByDefault/agent-packet.git
+   cd agent-packet
+   conda create -n agent_packet python=3.10 -y
+   conda activate agent_packet
    pip install -r requirements.txt
    ```
 
@@ -252,15 +253,35 @@ async with LocalLLMAgent(config) as agent:
 - Add Docker deployment
 - Implement agent-to-agent communication
 
+## 🛡️ Security & Privacy
+
+- **Fully Local**: All processing happens on your machine
+- **No Data Transmission**: Your documents and conversations never leave your system
+- **Private RAG**: Build your own knowledge base without cloud dependencies
+- **Configurable**: Complete control over models, data storage, and processing
+
+## ⚠️ Important Notes
+
+- **Data Privacy**: This project does not include pre-built knowledge bases or training data
+- **Model Requirements**: You need to download your own Ollama models
+- **Storage**: Vector databases and documents are stored locally in the `data/` directory
+- **Performance**: Processing speed depends on your hardware capabilities
+
 ## 🤝 Contributing
 
-This is a template project. Customize and extend it for your needs:
+This is an open-source project. Customize and extend it for your needs:
 
 1. Add your own tools in `src/llm_agent/mcp/tools.py`
 2. Create custom LLM providers in `src/llm_agent/llm/`
 3. Implement new vector databases in `src/llm_agent/rag/`
 4. Extend configuration in `src/llm_agent/core/config.py`
 
+Feel free to submit issues, feature requests, or pull requests!
+
 ## 📄 License
 
 MIT License - feel free to use this as a starting point for your projects!
+
+---
+
+**Ready to build your own intelligent agent? Clone this repository and start experimenting with local LLMs, RAG systems, and MCP tools!**
