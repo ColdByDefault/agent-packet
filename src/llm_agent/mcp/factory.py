@@ -76,7 +76,7 @@ def create_mcp_server(server_type: str = "simple", config: Dict[str, Any] = None
     return MCPServerFactory.create_server(server_type, config)
 
 
-def create_basic_mcp_server(port: int = 8000, enable_builtin_tools: bool = True) -> MCPServer:
+def create_basic_mcp_server(port: int = 8001, enable_builtin_tools: bool = True) -> MCPServer:
     """Create a basic MCP server with default configuration."""
     config = {
         "port": port,

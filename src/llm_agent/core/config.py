@@ -32,7 +32,7 @@ class RAGConfig(BaseModel):
 class MCPConfig(BaseModel):
     """Configuration for MCP (Model Context Protocol) integration."""
     enabled: bool = Field(default=True, description="Enable MCP integration")
-    server_port: int = Field(default=8000, ge=1024, le=65535, description="MCP server port")
+    server_port: int = Field(default=8001, ge=1024, le=65535, description="MCP server port")
     max_connections: int = Field(default=10, ge=1, le=100, description="Max concurrent connections")
     tools_enabled: List[str] = Field(default_factory=lambda: ["search", "calculator", "weather"], 
                                    description="List of enabled tools")

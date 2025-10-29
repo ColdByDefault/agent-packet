@@ -22,7 +22,7 @@ class SimpleMCPServer(MCPServer):
         """Initialize simple MCP server."""
         super().__init__(config)
         self.host = config.get("host", "localhost")
-        self.port = config.get("port", 8000)
+        self.port = config.get("port", 8001)
         self.app = FastAPI(title="Local LLM Agent MCP Server")
         self.server: Optional[uvicorn.Server] = None
         
