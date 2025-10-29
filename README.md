@@ -186,15 +186,92 @@ python example.py
 - **HTTP API**: `http://localhost:8001`
 - **Access**: RESTful endpoints for each tool
 
-## 11. Server Configuration
+## 11. Running the API Server
+
+You have **two options** for running the backend API server:
+
+### Option 1: Full Server with MCP Tools (Recommended)
+
+```bash
+python api_server.py
+```
+
+**Features:**
+
+- ✅ Chat with LLM
+- ✅ RAG (Knowledge retrieval)
+- ✅ MCP Tools (calculator, datetime, text_search, system_info)
+- ✅ Health check & status endpoints
+
+**Ports Used:**
+
+- `8001` - REST API (frontend connects here)
+- `8002` - MCP internal server (for tools)
+
+---
+
+### Option 2: Simple Server without MCP Tools
+
+```bash
+python api_server_simple.py
+```
+
+**Features:**
+
+- ✅ Chat with LLM
+- ✅ RAG (Knowledge retrieval)
+- ❌ No MCP Tools
+- ✅ Health check & status endpoints
+
+**Ports Used:**
+
+- `8001` - REST API only (no extra ports)
+
+**When to use:** If you don't need tool execution and want a simpler setup with just one port.
+
+---
+
+## 12. Server Configuration
+
+### Port Configuration
+
+The system uses multiple ports for different services:
+
+- **FastAPI REST API Server**: `8001` (Main API for frontend/external connections)
+  - Health check: `http://localhost:8001/health`
+  - API docs: `http://localhost:8001/docs`
+  - Chat endpoint: `http://localhost:8001/chat`
+- **MCP Internal Server**: `8002` (Used internally by the agent for tool execution)
+  - Configured in `api_server.py`: `server_port=8002`
+  - Not directly accessible from frontend
+- **Ollama LLM Server**: `11434` (Default Ollama port)
+  - Base URL: `http://localhost:11434`
 
 ### MCP Server Port
 
 - **Example.py uses**: `8001` (configurable)
+- **API Server uses**: `8002` (to avoid conflict with main API on 8001)
 
 ```bash
-MCP__SERVER_PORT=8001  # Default in .env
+MCP__SERVER_PORT=8001  # Default in .env (for standalone MCP server)
 ```
+
+**Note**: When running the FastAPI server (`api_server.py`), the MCP server runs on port 8002 internally, while the main REST API uses port 8001.
+
+### Running Without MCP
+
+You can disable MCP and run only the REST API server by setting `enabled=False` in the `MCPConfig`:
+
+```bash
+python api_server_simple.py
+```
+
+When MCP is disabled:
+
+- Only port **8001** is used (REST API)
+- Port **8002** is not opened
+- The agent will work without tool execution capabilities
+- Chat, health check, and status endpoints still function normally
 
 ### Ollama Server Port
 

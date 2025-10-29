@@ -1,6 +1,6 @@
 """
-FastAPI server for the Local LLM Agent.
-Provides REST API endpoints to interact with the agent.
+Simple FastAPI server for the Local LLM Agent (without MCP tools).
+Provides REST API endpoints for chat functionality only.
 """
 
 import asyncio
@@ -32,17 +32,16 @@ async def lifespan(app: FastAPI):
     global agent
     
     # Startup
-    print("🚀 Starting Local LLM Agent API Server...")
+    print("🚀 Starting Simple LLM Agent API Server (No MCP)...")
     
-    # Create configuration
+    # Create configuration without MCP
     config = AgentConfig(
-        agent_name="LocalAgent",
-        system_prompt="""You are a helpful AI assistant running locally. You have access to:
-        - Your local knowledge base for retrieving relevant information
-        - Various tools for calculations, text search, and system information
-        - The ability to remember our conversation
+        agent_name="SimpleAgent",
+        system_prompt="""You are a helpful AI assistant running locally. 
+        You can chat and answer questions using your training data.
+        You have access to your local knowledge base for retrieving relevant information.
         
-        Always be helpful, accurate, and mention when you're using your knowledge base or tools.""",
+        Always be helpful, accurate, and conversational.""",
         
         ollama=OllamaConfig(
             base_url="http://localhost:11434",
@@ -58,8 +57,8 @@ async def lifespan(app: FastAPI):
         ),
         
         mcp=MCPConfig(
-            enabled=True,  # Set to False to disable MCP and run REST API only
-            server_port=8002  # MCP internal server on different port
+            enabled=False,  # MCP disabled - no tools, no extra port
+            server_port=8002
         )
     )
     
@@ -69,6 +68,7 @@ async def lifespan(app: FastAPI):
     try:
         await agent.initialize()
         print("✅ Agent initialized successfully!")
+        print("📌 MCP Tools: DISABLED")
     except Exception as e:
         print(f"⚠️  Warning: Could not fully initialize agent: {e}")
         print("    The health check will still work, but chat functionality may be limited.")
@@ -83,8 +83,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app with lifespan
 app = FastAPI(
-    title="Local LLM Agent API",
-    description="REST API for interacting with the Local LLM Agent",
+    title="Simple LLM Agent API (No MCP)",
+    description="REST API for chatting with Local LLM - No tool execution",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -98,7 +98,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global agent instance (removed as it's now in lifespan)
 restart_flag = False
 
 
@@ -113,7 +112,6 @@ def listen_for_restart():
             if user_input == "rs":
                 print("\n🔄 Restart requested! Restarting server...\n")
                 restart_flag = True
-                # Exit the process - watchfiles will restart it
                 import os
                 os._exit(0)
         except (EOFError, KeyboardInterrupt):
@@ -135,29 +133,21 @@ class ChatResponse(BaseModel):
 async def root():
     """Root endpoint."""
     return {
-        "message": "Local LLM Agent API",
+        "message": "Simple LLM Agent API (No MCP)",
         "status": "running",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "mcp_enabled": False
     }
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint to verify backend is running."""
-    mcp_tools = None
-    if agent and agent._initialized and agent.config.mcp.enabled and agent.mcp_server:
-        try:
-            # Get available tools from MCP server (synchronous call)
-            mcp_tools = agent.mcp_server.tool_registry.get_available_tools()
-        except Exception as e:
-            print(f"Error getting tools: {e}")
-    
     return {
         "status": "healthy",
         "agent_initialized": agent is not None and agent._initialized,
         "agent_name": agent.config.agent_name if agent else None,
-        "mcp_enabled": agent.config.mcp.enabled if agent else None,
-        "mcp_tools": mcp_tools,
+        "mcp_enabled": False,
         "timestamp": asyncio.get_event_loop().time()
     }
 
@@ -206,7 +196,7 @@ async def get_status():
         "llm_model": agent.config.ollama.model,
         "ollama_url": agent.config.ollama.base_url,
         "rag_enabled": agent.rag_system is not None,
-        "mcp_enabled": agent.config.mcp.enabled,
+        "mcp_enabled": False,
         "conversation_length": len(agent.conversation.messages)
     }
 
@@ -214,13 +204,14 @@ async def get_status():
 def main():
     """Run the API server."""
     print("=" * 60)
-    print("🤖 Local LLM Agent API Server")
+    print("🤖 Simple LLM Agent API Server (No MCP)")
     print("=" * 60)
     print()
     print("📡 Starting server on http://localhost:8001")
     print("📖 API docs available at http://localhost:8001/docs")
     print()
     print("⚠️  Make sure Ollama is running on http://localhost:11434")
+    print("🔧 MCP Tools: DISABLED (no extra port needed)")
     print()
     
     # Start input listener in a separate thread
@@ -228,12 +219,12 @@ def main():
     input_thread.start()
     
     uvicorn.run(
-        "api_server:app",  # Use import string for reload to work
+        "api_server_simple:app",  # Use import string for reload to work
         host="0.0.0.0",
         port=8001,
         log_level="info",
-        reload=True,  # Enable auto-reload on code changes
-        reload_dirs=["./src", "."]  # Watch src directory and current directory
+        reload=True,
+        reload_dirs=["./src", "."]
     )
 
 
