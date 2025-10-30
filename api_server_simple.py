@@ -234,6 +234,27 @@ async def clear_conversation():
     }
 
 
+@app.post("/conversation/new")
+async def start_new_conversation():
+    """Start a new conversation session, preserving agent's memory."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    # Start new session (clears conversation but keeps memory)
+    session_id = agent.conversation.start_new_session()
+    
+    return {
+        "message": "New conversation session started. Agent memory preserved.",
+        "session_id": session_id,
+        "conversation_length": 0,
+        "memory_preserved": True,
+        "timestamp": asyncio.get_event_loop().time()
+    }
+
+
 @app.get("/knowledge/stats")
 async def get_knowledge_stats():
     """Get statistics about the knowledge base (RAG)."""

@@ -9,13 +9,14 @@ from loguru import logger
 
 from .config import AgentConfig
 from .persistence import ConversationPersistence
+from .memory_helper import MemoryHelper
 from ..llm import LLMProvider, LLMMessage, LLMResponse, LLMRole, create_llm_provider
 from ..rag import LocalRAGSystem, create_rag_system
 from ..mcp import MCPServer, create_basic_mcp_server, ToolCall
 
 
 class ConversationManager:
-    """Manages conversation history and context with persistence."""
+    """Manages conversation history and context with persistence and long-term memory."""
     
     def __init__(self, max_length: int = 20, enable_persistence: bool = True):
         """Initialize conversation manager."""
@@ -24,10 +25,46 @@ class ConversationManager:
         self.system_prompt: Optional[str] = None
         self.enable_persistence = enable_persistence
         self.persistence = ConversationPersistence() if enable_persistence else None
+        self.memory: Dict[str, Any] = {}  # Long-term memory
+        
+        # Load memory if persistence is enabled
+        if self.enable_persistence and self.persistence:
+            self.memory = self.persistence.load_memory()
     
     def set_system_prompt(self, prompt: str) -> None:
         """Set system prompt."""
         self.system_prompt = prompt
+    
+    def update_memory(self, key: str, value: Any) -> None:
+        """Update long-term memory."""
+        self.memory[key] = value
+        
+        # Save memory to disk
+        if self.enable_persistence and self.persistence:
+            try:
+                self.persistence.save_memory(self.memory)
+            except Exception as e:
+                logger.warning(f"Failed to save memory: {e}")
+    
+    def get_memory(self, key: str, default: Any = None) -> Any:
+        """Get value from long-term memory."""
+        return self.memory.get(key, default)
+    
+    def get_memory_summary(self) -> str:
+        """Get a summary of stored memory for context."""
+        if not self.memory:
+            return ""
+        
+        summary_parts = []
+        for key, value in self.memory.items():
+            if isinstance(value, (str, int, float, bool)):
+                summary_parts.append(f"- {key}: {value}")
+            else:
+                summary_parts.append(f"- {key}: [stored]")
+        
+        if summary_parts:
+            return "## Remembered Information:\n" + "\n".join(summary_parts)
+        return ""
     
     def add_message(self, role: LLMRole, content: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Add message to conversation."""
@@ -84,13 +121,37 @@ class ConversationManager:
         except Exception as e:
             logger.warning(f"Failed to load conversation: {e}")
     
+    def start_new_session(self) -> str:
+        """Start a new conversation session. Returns session_id."""
+        # Save current conversation before starting new one
+        if self.messages and self.enable_persistence and self.persistence:
+            self._save_to_disk()
+        
+        # Clear current messages but keep memory
+        self.messages = []
+        
+        # Start new session in persistence
+        if self.enable_persistence and self.persistence:
+            session_id = self.persistence.start_new_session()
+            logger.info(f"Started new conversation session: {session_id}")
+            return session_id
+        
+        return "no-persistence"
+    
     def get_messages(self, include_system: bool = True) -> List[LLMMessage]:
-        """Get conversation messages."""
+        """Get conversation messages with memory context."""
         messages = []
         
-        # Add system prompt if available and requested
+        # Add system prompt with memory context if available
         if include_system and self.system_prompt:
-            messages.append(LLMMessage(role=LLMRole.SYSTEM, content=self.system_prompt))
+            system_content = self.system_prompt
+            
+            # Append memory summary to system prompt
+            memory_summary = self.get_memory_summary()
+            if memory_summary:
+                system_content += "\n\n" + memory_summary
+            
+            messages.append(LLMMessage(role=LLMRole.SYSTEM, content=system_content))
         
         # Add conversation messages, but skip existing system messages
         for msg in self.messages:
@@ -225,6 +286,12 @@ class LocalLLMAgent:
             
             # Add assistant response to conversation
             self.conversation.add_message(LLMRole.ASSISTANT, response.content)
+            
+            # Auto-extract and store important information
+            extracted_facts = MemoryHelper.auto_extract_facts(message, response.content)
+            for key, value in extracted_facts.items():
+                self.conversation.update_memory(key, value)
+                logger.info(f"Remembered: {key} = {value}")
             
             logger.debug(f"Generated response: {len(response.content)} characters")
             return response.content
