@@ -31,16 +31,13 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown."""
     global agent
     
-    # Startup
-    print("🚀 Starting Local LLM Agent API Server...")
-    
-    # Create configuration
+    # Startup - Silent initialization
     config = AgentConfig(
         agent_name="LocalAgent",
         system_prompt="""You are a helpful AI assistant running locally. You have access to:
         - Your local knowledge base for retrieving relevant information
         - Various tools for calculations, text search, and system information
-        - The ability to remember our conversation
+        - The ability to remember our conversation even after restarts
         
         Always be helpful, accurate, and mention when you're using your knowledge base or tools.""",
         
@@ -68,17 +65,14 @@ async def lifespan(app: FastAPI):
     
     try:
         await agent.initialize()
-        print("✅ Agent initialized successfully!")
     except Exception as e:
         print(f"⚠️  Warning: Could not fully initialize agent: {e}")
-        print("    The health check will still work, but chat functionality may be limited.")
     
     yield
     
     # Shutdown
     if agent:
         await agent.cleanup()
-        print("👋 Agent cleaned up")
 
 
 # Create FastAPI app with lifespan
@@ -105,15 +99,12 @@ restart_flag = False
 def listen_for_restart():
     """Listen for 'rs' command to restart the server."""
     global restart_flag
-    print("\n💡 Tip: Type 'rs' and press Enter to restart the server\n")
     
     while not restart_flag:
         try:
             user_input = input().strip().lower()
             if user_input == "rs":
-                print("\n🔄 Restart requested! Restarting server...\n")
                 restart_flag = True
-                # Exit the process - watchfiles will restart it
                 import os
                 os._exit(0)
         except (EOFError, KeyboardInterrupt):
@@ -180,14 +171,13 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=503, detail="Agent still initializing")
     
     try:
-        # Query the agent
-        response = await agent.query(request.message)
+        # Chat with the agent
+        response_text = await agent.chat(request.message)
         
         return ChatResponse(
-            response=response.content,
+            response=response_text,
             metadata={
                 "model": agent.config.ollama.model,
-                "tokens_used": response.metadata.get("tokens_used", 0)
             }
         )
     except Exception as e:
@@ -200,6 +190,14 @@ async def get_status():
     if not agent:
         return {"status": "not_initialized"}
     
+    # Get MCP tools if available
+    mcp_tools = None
+    if agent.config.mcp.enabled and agent.mcp_server:
+        try:
+            mcp_tools = agent.mcp_server.tool_registry.get_available_tools()
+        except Exception:
+            mcp_tools = None
+    
     return {
         "status": "ready" if agent._initialized else "initializing",
         "agent_name": agent.config.agent_name,
@@ -207,33 +205,147 @@ async def get_status():
         "ollama_url": agent.config.ollama.base_url,
         "rag_enabled": agent.rag_system is not None,
         "mcp_enabled": agent.config.mcp.enabled,
+        "mcp_tools": mcp_tools,
         "conversation_length": len(agent.conversation.messages)
+    }
+
+
+@app.get("/conversation")
+async def get_conversation():
+    """Get the current conversation history."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    # Get messages and convert to serializable format
+    messages = []
+    for msg in agent.conversation.messages:
+        messages.append({
+            "role": msg.role.value,  # Convert enum to string
+            "content": msg.content,
+            "timestamp": None,  # Backend doesn't store timestamps
+        })
+    
+    return {
+        "messages": messages,
+        "conversation_length": len(messages)
+    }
+
+
+@app.delete("/conversation")
+async def clear_conversation():
+    """Clear the conversation history."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    agent.conversation.clear()
+    
+    return {
+        "message": "Conversation cleared",
+        "conversation_length": 0
+    }
+
+
+@app.get("/knowledge/stats")
+async def get_knowledge_stats():
+    """Get statistics about the knowledge base (RAG)."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    if not agent.rag_system:
+        return {
+            "enabled": False,
+            "document_count": 0,
+            "chunk_count": 0,
+            "embedding_model": None
+        }
+    
+    try:
+        # Get collection info from ChromaDB
+        collection = agent.rag_system.vector_store.collection
+        count = collection.count()
+        
+        return {
+            "enabled": True,
+            "chunk_count": count,
+            "embedding_model": agent.config.rag.embedding_model,
+            "vector_db_path": agent.config.rag.vector_db_path,
+            "chunk_size": agent.config.rag.chunk_size,
+            "similarity_threshold": agent.config.rag.similarity_threshold
+        }
+    except Exception as e:
+        return {
+            "enabled": True,
+            "error": str(e),
+            "chunk_count": 0
+        }
+
+
+@app.get("/knowledge/search")
+async def search_knowledge(query: str, limit: int = 10):
+    """Search the knowledge base."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    if not agent.rag_system:
+        raise HTTPException(status_code=400, detail="RAG system not enabled")
+    
+    try:
+        results = await agent.search_knowledge(query, k=limit)
+        return {
+            "query": query,
+            "results": results,
+            "result_count": len(results)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@app.get("/memory/stats")
+async def get_memory_stats():
+    """Get memory statistics."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    if not agent._initialized:
+        raise HTTPException(status_code=503, detail="Agent still initializing")
+    
+    return {
+        "conversation_length": len(agent.conversation.messages),
+        "max_conversation_length": agent.conversation.max_length,
+        "estimated_tokens": agent.conversation.get_context_length(),
+        "persistence_enabled": agent.conversation.enable_persistence,
+        "system_prompt_set": agent.conversation.system_prompt is not None
     }
 
 
 def main():
     """Run the API server."""
-    print("=" * 60)
-    print("🤖 Local LLM Agent API Server")
-    print("=" * 60)
-    print()
-    print("📡 Starting server on http://localhost:8001")
-    print("📖 API docs available at http://localhost:8001/docs")
-    print()
-    print("⚠️  Make sure Ollama is running on http://localhost:11434")
-    print()
+    print("🤖 LLM Agent API - http://localhost:8001")
+    print("📖 Docs: http://localhost:8001/docs\n")
     
     # Start input listener in a separate thread
     input_thread = threading.Thread(target=listen_for_restart, daemon=True)
     input_thread.start()
     
     uvicorn.run(
-        "api_server:app",  # Use import string for reload to work
+        "api_server:app",
         host="0.0.0.0",
         port=8001,
-        log_level="info",
-        reload=True,  # Enable auto-reload on code changes
-        reload_dirs=["./src", "."]  # Watch src directory and current directory
+        log_level="warning",  # Reduce noise
+        reload=True,
+        reload_dirs=["./src", "."]
     )
 
 

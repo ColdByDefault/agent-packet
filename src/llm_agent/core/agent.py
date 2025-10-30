@@ -8,19 +8,22 @@ from typing import Dict, List, Any, Optional, AsyncGenerator
 from loguru import logger
 
 from .config import AgentConfig
+from .persistence import ConversationPersistence
 from ..llm import LLMProvider, LLMMessage, LLMResponse, LLMRole, create_llm_provider
 from ..rag import LocalRAGSystem, create_rag_system
 from ..mcp import MCPServer, create_basic_mcp_server, ToolCall
 
 
 class ConversationManager:
-    """Manages conversation history and context."""
+    """Manages conversation history and context with persistence."""
     
-    def __init__(self, max_length: int = 20):
+    def __init__(self, max_length: int = 20, enable_persistence: bool = True):
         """Initialize conversation manager."""
         self.max_length = max_length
         self.messages: List[LLMMessage] = []
         self.system_prompt: Optional[str] = None
+        self.enable_persistence = enable_persistence
+        self.persistence = ConversationPersistence() if enable_persistence else None
     
     def set_system_prompt(self, prompt: str) -> None:
         """Set system prompt."""
@@ -38,6 +41,48 @@ class ConversationManager:
                 self.messages = [self.messages[0]] + self.messages[-(self.max_length-1):]
             else:
                 self.messages = self.messages[-self.max_length:]
+        
+        # Save to disk after adding message
+        if self.enable_persistence:
+            self._save_to_disk()
+    
+    def _save_to_disk(self) -> None:
+        """Save conversation to disk."""
+        if not self.persistence:
+            return
+        
+        try:
+            messages_data = [
+                {
+                    "role": msg.role.value,
+                    "content": msg.content,
+                    "metadata": msg.metadata or {}
+                }
+                for msg in self.messages
+            ]
+            self.persistence.save_conversation(messages_data)
+        except Exception as e:
+            logger.warning(f"Failed to save conversation: {e}")
+    
+    def load_from_disk(self) -> None:
+        """Load conversation from disk."""
+        if not self.persistence:
+            return
+        
+        try:
+            messages_data = self.persistence.load_conversation()
+            self.messages = []
+            
+            for msg_data in messages_data:
+                role = LLMRole(msg_data["role"])
+                content = msg_data["content"]
+                metadata = msg_data.get("metadata")
+                self.messages.append(LLMMessage(role=role, content=content, metadata=metadata))
+            
+            if self.messages:
+                logger.info(f"Loaded {len(self.messages)} messages from disk")
+        except Exception as e:
+            logger.warning(f"Failed to load conversation: {e}")
     
     def get_messages(self, include_system: bool = True) -> List[LLMMessage]:
         """Get conversation messages."""
@@ -57,6 +102,13 @@ class ConversationManager:
     def clear(self) -> None:
         """Clear conversation history."""
         self.messages = []
+        
+        # Clear from disk too
+        if self.enable_persistence and self.persistence:
+            try:
+                self.persistence.clear_conversation()
+            except Exception as e:
+                logger.warning(f"Failed to clear persisted conversation: {e}")
     
     def get_context_length(self) -> int:
         """Estimate token count of conversation."""
@@ -90,6 +142,10 @@ class LocalLLMAgent:
         try:
             # Validate and create paths
             self.config.validate_paths()
+            
+            # Load conversation history from disk
+            logger.info("Loading conversation history...")
+            self.conversation.load_from_disk()
             
             # Initialize LLM provider
             logger.info("Initializing LLM provider...")
